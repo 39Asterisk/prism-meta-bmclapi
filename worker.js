@@ -22,32 +22,57 @@ const REPLACEMENTS = [
   // === Neoforge ===
   { regex: /maven\.neoforged\.net\/releases/g, replacement: 'bmclapi2.bangbang93.com/maven' },
   
-  // === Quilt===
+  // === Quilt ===
   { regex: /maven\.quiltmc\.org\/repository\/release/g, replacement: 'bmclapi2.bangbang93.com/maven' },
   { regex: /meta\.quiltmc\.org/g, replacement: 'bmclapi2.bangbang93.com/quilt-meta' }
 ];
+
+function stripIndexHashes(body) {
+  try {
+    const json = JSON.parse(body);
+    let modified = false;
+
+    if (Array.isArray(json.versions)) {
+      for (const v of json.versions) {
+        if ('sha256' in v) { delete v.sha256; modified = true; }
+        if ('sha1' in v)   { delete v.sha1;   modified = true; }
+      }
+    }
+
+    if (Array.isArray(json.packages)) {
+      for (const p of json.packages) {
+        if ('sha256' in p) { delete p.sha256; modified = true; }
+        if ('sha1' in p)   { delete p.sha1;   modified = true; }
+      }
+    }
+
+    return modified ? JSON.stringify(json) : body;
+  } catch {
+    return body;
+  }
+}
 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
     let pathname = url.pathname;
-
     if (!pathname.startsWith('/')) pathname = '/' + pathname;
 
     const upstream = 'https://meta.prismlauncher.org/v1/' + pathname;
-
     const response = await fetch(upstream, { cf: { cacheTtl: 86400 } });
-    
+
     const contentType = response.headers.get('content-type') || '';
     if (!response.ok || (!contentType.includes('json') && !contentType.includes('text'))) {
       return response;
     }
 
     let body = await response.text();
-    
+
     for (const { regex, replacement } of REPLACEMENTS) {
       body = body.replace(regex, replacement);
     }
+
+    body = stripIndexHashes(body);
 
     const headers = new Headers(response.headers);
     headers.set('Access-Control-Allow-Origin', '*');
